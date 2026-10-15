@@ -171,6 +171,11 @@
       <form id="auth-form">
         <div class="dialog-heading"><div><p class="eyebrow">YOUR DATA, WHEREVER YOU GO</p><h2 id="auth-dialog-title">Sign in to sync</h2></div><button class="close-button" type="button" id="close-auth-dialog" aria-label="Close">×</button></div>
         <p class="auth-intro">Create an account or sign in to securely sync your expenses and budget across devices.</p>
+        <button class="google-button" id="google-sign-in" type="button">
+          <span class="google-mark" aria-hidden="true">G</span>
+          <span>Continue with Google</span>
+        </button>
+        <div class="auth-divider"><span>or continue with email</span></div>
         <label class="form-field">Email address<input name="email" type="email" autocomplete="email" placeholder="you@example.com" maxlength="254" required></label>
         <label class="form-field">Password<input name="password" type="password" autocomplete="current-password" minlength="8" placeholder="At least 8 characters" required></label>
         <p class="form-error" id="auth-message" role="status" hidden></p>

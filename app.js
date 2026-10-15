@@ -261,7 +261,7 @@ function openAuthDialog() {
   } else {
     setup.textContent = "Cloud sync is not configured yet. Follow the Supabase setup steps in the README, then add your project URL and publishable key to config.js. Never put a service-role key in this app.";
   }
-  document.querySelector("#auth-form").querySelectorAll("input, #auth-submit, #auth-mode-toggle")
+  document.querySelector("#auth-form").querySelectorAll("input, #auth-submit, #auth-mode-toggle, #google-sign-in")
     .forEach((element) => { element.disabled = !supabaseClient; });
   setAuthMode("signin");
   authDialog.showModal();
@@ -571,6 +571,33 @@ document.querySelector("#cancel-import").addEventListener("click", () => importD
 document.querySelector("#auth-mode-toggle").addEventListener("click", () => {
   setAuthMode(authMode === "signin" ? "signup" : "signin");
   showDialogMessage(document.querySelector("#auth-message"), "");
+});
+document.querySelector("#google-sign-in").addEventListener("click", async () => {
+  const message = document.querySelector("#auth-message");
+  if (!supabaseClient) {
+    showDialogMessage(message, "Configure Supabase and reload the app before signing in.");
+    return;
+  }
+
+  const button = document.querySelector("#google-sign-in");
+  button.disabled = true;
+  showDialogMessage(message, "");
+  try {
+    const { error } = await supabaseClient.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}${window.location.pathname}`,
+      },
+    });
+    if (error) throw error;
+  } catch (error) {
+    const description = String(error?.message || "").toLowerCase().includes("provider")
+      ? "Google sign-in needs to be enabled in Supabase with Google OAuth credentials. Follow the Google setup steps in the README."
+      : `Could not sign in with Google. ${error?.message || "Please try again."}`;
+    console.error("Could not sign in with Google.", error);
+    showDialogMessage(message, description);
+    button.disabled = false;
+  }
 });
 importForm.addEventListener("submit", (event) => {
   event.preventDefault();

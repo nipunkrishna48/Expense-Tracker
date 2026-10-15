@@ -18,11 +18,28 @@ const currentMonth = toMonthValue(today);
 const monthFilter = document.querySelector("#month-filter");
 const expenseDialog = document.querySelector("#expense-dialog");
 const budgetDialog = document.querySelector("#budget-dialog");
+const authDialog = document.querySelector("#auth-dialog");
+const importDialog = document.querySelector("#import-dialog");
 const expenseForm = document.querySelector("#expense-form");
 const budgetForm = document.querySelector("#budget-form");
+const authForm = document.querySelector("#auth-form");
+const importForm = document.querySelector("#import-form");
 const transactionList = document.querySelector("#transaction-list");
+const supabaseConfig = window.POCKETWISE_SUPABASE_CONFIG;
+const cloudConfigured = Boolean(
+  supabaseConfig?.url && supabaseConfig?.anonKey &&
+  /^https:\/\/[^/]+\.supabase\.co$/.test(supabaseConfig.url)
+);
+const supabaseClient = cloudConfigured && window.supabase?.createClient
+  ? window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey)
+  : null;
 let expenses = readExpenses();
 let budget = readBudget();
+let currentUser = null;
+let authMode = "signin";
+let cloudLoading = false;
+let handledUserId = undefined;
+let sessionGeneration = 0;
 
 function toDateValue(date) {
   const year = date.getFullYear();
@@ -33,6 +50,14 @@ function toDateValue(date) {
 
 function toMonthValue(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function createId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (character) => {
+    const random = Math.floor(Math.random() * 16);
+    return (character === "x" ? random : (random & 0x3) | 0x8).toString(16);
+  });
 }
 
 function readExpenses() {
@@ -53,13 +78,19 @@ function readExpenses() {
 }
 
 function readBudget() {
-  const saved = Number(localStorage.getItem(STORAGE_KEYS.budget));
-  return Number.isFinite(saved) && saved >= 0 ? saved : 0;
+  try {
+    const saved = Number(localStorage.getItem(STORAGE_KEYS.budget));
+    return Number.isFinite(saved) && saved >= 0 ? saved : 0;
+  } catch (error) {
+    console.error("Could not load the saved budget.", error);
+    window.alert("Your saved budget could not be loaded. Check that browser storage is available.");
+    return 0;
+  }
 }
 
-function saveExpenses() {
+function saveExpenses(value = expenses) {
   try {
-    localStorage.setItem(STORAGE_KEYS.expenses, JSON.stringify(expenses));
+    localStorage.setItem(STORAGE_KEYS.expenses, JSON.stringify(value));
   } catch (error) {
     console.error("Could not save expenses.", error);
     window.alert("Your expense could not be saved. Check that browser storage is available.");
@@ -68,15 +99,235 @@ function saveExpenses() {
   return true;
 }
 
-function saveBudget() {
+function saveBudget(value = budget) {
   try {
-    localStorage.setItem(STORAGE_KEYS.budget, String(budget));
+    localStorage.setItem(STORAGE_KEYS.budget, String(value));
   } catch (error) {
     console.error("Could not save your budget.", error);
     window.alert("Your budget could not be saved. Check that browser storage is available.");
     return false;
   }
   return true;
+}
+
+function hasLocalData() {
+  return readExpenses().length > 0 || readBudget() > 0;
+}
+
+function showStatus(message, isError = false) {
+  const status = document.querySelector("#sync-status");
+  status.textContent = message;
+  status.hidden = !message;
+  status.classList.toggle("status-error", isError);
+}
+
+function showDialogMessage(element, message) {
+  element.textContent = message;
+  element.hidden = !message;
+}
+
+function updateAccountUI() {
+  const authAction = document.querySelector("#auth-action");
+  const importButton = document.querySelector("#import-local");
+  const signOutButton = document.querySelector("#sign-out");
+  const storageStatus = document.querySelector("#storage-status");
+  const profileName = document.querySelector("#account-name");
+  const profileDetail = document.querySelector("#account-detail");
+  const avatar = document.querySelector("#account-avatar");
+
+  if (currentUser) {
+    authAction.textContent = "Sign out";
+    importButton.hidden = !hasLocalData();
+    signOutButton.hidden = false;
+    profileName.textContent = currentUser.email || "Student account";
+    profileDetail.textContent = "Cloud sync enabled";
+    avatar.textContent = (currentUser.email || "S").slice(0, 1).toUpperCase();
+    storageStatus.innerHTML = 'Synced to your account <span class="privacy-lock" aria-hidden="true">⌑</span>';
+  } else {
+    authAction.textContent = "Sign in to sync";
+    importButton.hidden = true;
+    signOutButton.hidden = true;
+    profileName.textContent = "Student account";
+    profileDetail.textContent = "On this device";
+    avatar.textContent = "S";
+    storageStatus.innerHTML = 'Stored on this device <span class="privacy-lock" aria-hidden="true">⌑</span>';
+  }
+
+  document.querySelector("#budget-hint").textContent = currentUser
+    ? "Your budget is synced to your account."
+    : "Your budget is saved just on this device.";
+}
+
+function reportError(action, error, target = null) {
+  console.error(`Could not ${action}.`, error);
+  const message = `Could not ${action}. ${error?.message || "Please try again."}`;
+  if (target) showDialogMessage(target, message);
+  else showStatus(message, true);
+}
+
+async function loadCloudData() {
+  const [expenseResult, settingsResult] = await Promise.all([
+    supabaseClient.from("expenses")
+      .select("id, description, amount, category, date")
+      .order("date", { ascending: false }),
+    supabaseClient.from("user_settings")
+      .select("monthly_budget")
+      .maybeSingle(),
+  ]);
+  if (expenseResult.error) throw expenseResult.error;
+  if (settingsResult.error) throw settingsResult.error;
+
+  return {
+    expenses: expenseResult.data.map((expense) => ({
+      id: expense.id,
+      description: expense.description,
+      amount: Number(expense.amount),
+      category: expense.category,
+      date: expense.date,
+    })),
+    budget: settingsResult.data ? Number(settingsResult.data.monthly_budget) : 0,
+  };
+}
+
+async function handleAuthSession(session) {
+  const nextUser = session?.user || null;
+  const nextUserId = nextUser?.id || null;
+  if (handledUserId === nextUserId) return;
+  const generation = ++sessionGeneration;
+  handledUserId = nextUserId;
+  currentUser = nextUser;
+  updateAccountUI();
+
+  if (!currentUser) {
+    cloudLoading = false;
+    expenses = readExpenses();
+    budget = readBudget();
+    render();
+    showStatus("");
+    return;
+  }
+
+  cloudLoading = true;
+  expenses = [];
+  budget = 0;
+  render();
+  showStatus("Loading your synced expenses…");
+  try {
+    const cloudData = await loadCloudData();
+    if (generation !== sessionGeneration) return;
+    expenses = cloudData.expenses;
+    budget = cloudData.budget;
+    render();
+    showStatus("");
+  } catch (error) {
+    if (generation !== sessionGeneration) return;
+    reportError("load your account data", error);
+    render();
+  } finally {
+    if (generation === sessionGeneration) cloudLoading = false;
+  }
+}
+
+async function signOut() {
+  if (!supabaseClient) return;
+  try {
+    const { error } = await supabaseClient.auth.signOut();
+    if (error) throw error;
+  } catch (error) {
+    reportError("sign out", error);
+  }
+}
+
+function setAuthMode(mode) {
+  authMode = mode;
+  const signingUp = mode === "signup";
+  document.querySelector("#auth-dialog-title").textContent = signingUp ? "Create your account" : "Sign in to sync";
+  document.querySelector("#auth-submit").innerHTML = signingUp
+    ? 'Create account <span aria-hidden="true">↗</span>'
+    : 'Sign in <span aria-hidden="true">↗</span>';
+  document.querySelector("#auth-mode-toggle").textContent = signingUp
+    ? "Already have an account? Sign in"
+    : "New here? Create an account";
+  authForm.elements.password.autocomplete = signingUp ? "new-password" : "current-password";
+}
+
+function openAuthDialog() {
+  authForm.reset();
+  showDialogMessage(document.querySelector("#auth-message"), "");
+  const setup = document.querySelector("#auth-setup");
+  setup.hidden = Boolean(supabaseClient);
+  if (cloudConfigured && !supabaseClient) {
+    setup.textContent = "The Supabase browser library could not load. Check your internet connection and reload the app.";
+  } else {
+    setup.textContent = "Cloud sync is not configured yet. Follow the Supabase setup steps in the README, then add your project URL and publishable key to config.js. Never put a service-role key in this app.";
+  }
+  document.querySelector("#auth-form").querySelectorAll("input, #auth-submit, #auth-mode-toggle")
+    .forEach((element) => { element.disabled = !supabaseClient; });
+  setAuthMode("signin");
+  authDialog.showModal();
+}
+
+function openImportDialog() {
+  document.querySelector("#local-expense-count").textContent = String(readExpenses().length);
+  showDialogMessage(document.querySelector("#import-message"), "");
+  importDialog.showModal();
+}
+
+async function importLocalData() {
+  if (!currentUser || !supabaseClient) return;
+
+  const importingUserId = currentUser.id;
+  const importMessage = document.querySelector("#import-message");
+  const confirmButton = document.querySelector("#confirm-import");
+  confirmButton.disabled = true;
+  showDialogMessage(importMessage, "");
+  try {
+    const savedExpenses = readExpenses();
+    const localExpenses = savedExpenses.map((expense) => ({
+      ...expense,
+      id: /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(expense.id)
+        ? expense.id
+        : createId(),
+    }));
+    if (localExpenses.some((expense, index) => expense.id !== savedExpenses[index].id) &&
+        !saveExpenses(localExpenses)) {
+      throw new Error("Could not prepare the local records for import.");
+    }
+
+    for (let index = 0; index < localExpenses.length; index += 250) {
+      const batch = localExpenses.slice(index, index + 250).map((expense) => ({
+        id: expense.id,
+        description: expense.description,
+        amount: expense.amount,
+        category: expense.category,
+        date: expense.date,
+      }));
+      if (batch.length === 0) continue;
+      const { error } = await supabaseClient.from("expenses").upsert(batch, { onConflict: "id" });
+      if (error) throw error;
+      if (currentUser?.id !== importingUserId) return;
+    }
+
+    const { error: settingsError } = await supabaseClient.from("user_settings").upsert({
+      user_id: currentUser.id,
+      monthly_budget: readBudget(),
+    }, { onConflict: "user_id" });
+    if (settingsError) throw settingsError;
+    if (currentUser?.id !== importingUserId) return;
+
+    const cloudData = await loadCloudData();
+    if (currentUser?.id !== importingUserId) return;
+    expenses = cloudData.expenses;
+    budget = cloudData.budget;
+    render();
+    updateAccountUI();
+    importDialog.close();
+    showStatus(`Imported ${localExpenses.length} ${localExpenses.length === 1 ? "expense" : "expenses"} and your budget.`);
+  } catch (error) {
+    reportError("import your local data", error, importMessage);
+  } finally {
+    confirmButton.disabled = false;
+  }
 }
 
 function formatDate(dateString) {
@@ -269,6 +520,10 @@ function render() {
 }
 
 function openExpenseDialog() {
+  if (cloudLoading) {
+    showStatus("Your account data is still loading. Please wait.");
+    return;
+  }
   document.querySelector("#form-error").hidden = true;
   expenseForm.reset();
   expenseForm.elements.date.value = toDateValue(today);
@@ -294,28 +549,66 @@ document.querySelector("#empty-add-expense").addEventListener("click", openExpen
 document.querySelector("#close-dialog").addEventListener("click", () => expenseDialog.close());
 document.querySelector("#cancel-dialog").addEventListener("click", () => expenseDialog.close());
 document.querySelector("#edit-budget").addEventListener("click", () => {
+  if (cloudLoading) {
+    showStatus("Your account data is still loading. Please wait.");
+    return;
+  }
+  showDialogMessage(document.querySelector("#budget-error"), "");
   budgetForm.elements.budget.value = budget > 0 ? String(budget) : "";
   budgetDialog.showModal();
 });
 document.querySelector("#close-budget-dialog").addEventListener("click", () => budgetDialog.close());
 document.querySelector("#cancel-budget").addEventListener("click", () => budgetDialog.close());
+document.querySelector("#auth-action").addEventListener("click", () => {
+  if (currentUser) void signOut();
+  else openAuthDialog();
+});
+document.querySelector("#sign-out").addEventListener("click", () => void signOut());
+document.querySelector("#import-local").addEventListener("click", openImportDialog);
+document.querySelector("#close-auth-dialog").addEventListener("click", () => authDialog.close());
+document.querySelector("#close-import-dialog").addEventListener("click", () => importDialog.close());
+document.querySelector("#cancel-import").addEventListener("click", () => importDialog.close());
+document.querySelector("#auth-mode-toggle").addEventListener("click", () => {
+  setAuthMode(authMode === "signin" ? "signup" : "signin");
+  showDialogMessage(document.querySelector("#auth-message"), "");
+});
+importForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  void importLocalData();
+});
 monthFilter.addEventListener("change", render);
 document.querySelector("#search-transactions").addEventListener("input", renderTransactions);
 document.querySelector("#category-filter").addEventListener("change", renderTransactions);
-transactionList.addEventListener("click", (event) => {
+transactionList.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-expense-id]");
-  if (!button) return;
-  const previous = expenses;
-  expenses = expenses.filter((expense) => expense.id !== button.dataset.expenseId);
-  if (!saveExpenses()) {
-    expenses = previous;
-    return;
+  if (!button || cloudLoading) return;
+  const userId = currentUser?.id;
+  const expenseId = button.dataset.expenseId;
+  try {
+    if (currentUser) {
+      const { data, error } = await supabaseClient.from("expenses")
+        .delete()
+        .eq("id", expenseId)
+        .select("id");
+      if (error) throw error;
+      if (!data.length) throw new Error("This expense was not found in your account.");
+      if (currentUser?.id !== userId) return;
+      expenses = expenses.filter((expense) => expense.id !== expenseId);
+    } else {
+      const nextExpenses = expenses.filter((expense) => expense.id !== expenseId);
+      if (!saveExpenses(nextExpenses)) return;
+      expenses = nextExpenses;
+    }
+    render();
+    showStatus("");
+  } catch (error) {
+    reportError("delete the expense", error);
   }
-  render();
 });
 
-expenseForm.addEventListener("submit", (event) => {
+expenseForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (cloudLoading) return;
   const formData = new FormData(expenseForm);
   const amount = Number(formData.get("amount"));
   if (!Number.isFinite(amount) || amount <= 0) {
@@ -325,7 +618,7 @@ expenseForm.addEventListener("submit", (event) => {
     return;
   }
   const expense = {
-    id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    id: createId(),
     description: String(formData.get("description")).trim(),
     amount: Math.round(amount * 100) / 100,
     category: String(formData.get("category")),
@@ -337,28 +630,122 @@ expenseForm.addEventListener("submit", (event) => {
     error.hidden = false;
     return;
   }
-  expenses.push(expense);
-  if (!saveExpenses()) {
-    expenses.pop();
-    return;
+  const submitButton = expenseForm.querySelector('button[type="submit"]');
+  const userId = currentUser?.id;
+  submitButton.disabled = true;
+  try {
+    if (currentUser) {
+      const { data, error } = await supabaseClient.from("expenses")
+        .insert({
+          description: expense.description,
+          amount: expense.amount,
+          category: expense.category,
+          date: expense.date,
+        })
+        .select("id, description, amount, category, date")
+        .single();
+      if (error) throw error;
+      if (currentUser?.id !== userId) {
+        expenseDialog.close();
+        return;
+      }
+      expenses.push({ ...data, amount: Number(data.amount) });
+    } else {
+      const nextExpenses = [...expenses, expense];
+      if (!saveExpenses(nextExpenses)) return;
+      expenses = nextExpenses;
+    }
+    monthFilter.value = expense.date.slice(0, 7);
+    expenseDialog.close();
+    render();
+    showStatus("");
+  } catch (error) {
+    reportError("save the expense", error, document.querySelector("#form-error"));
+  } finally {
+    submitButton.disabled = false;
   }
-  monthFilter.value = expense.date.slice(0, 7);
-  expenseDialog.close();
-  render();
 });
 
-budgetForm.addEventListener("submit", (event) => {
+budgetForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (cloudLoading) return;
   const value = Number(budgetForm.elements.budget.value);
-  if (!Number.isFinite(value) || value < 0) return;
-  const previous = budget;
-  budget = Math.round(value * 100) / 100;
-  if (!saveBudget()) {
-    budget = previous;
+  if (!Number.isFinite(value) || value < 0) {
+    showDialogMessage(document.querySelector("#budget-error"), "Enter a valid budget amount.");
     return;
   }
-  budgetDialog.close();
-  render();
+  const amount = Math.round(value * 100) / 100;
+  const submitButton = budgetForm.querySelector('button[type="submit"]');
+  const userId = currentUser?.id;
+  submitButton.disabled = true;
+  try {
+    if (currentUser) {
+      const { error } = await supabaseClient.from("user_settings").upsert({
+        user_id: currentUser.id,
+        monthly_budget: amount,
+      }, { onConflict: "user_id" });
+      if (error) throw error;
+      if (currentUser?.id !== userId) {
+        budgetDialog.close();
+        return;
+      }
+    } else if (!saveBudget(amount)) {
+      return;
+    }
+    budget = amount;
+    budgetDialog.close();
+    render();
+    showStatus("");
+  } catch (error) {
+    reportError("save your budget", error, document.querySelector("#budget-error"));
+  } finally {
+    submitButton.disabled = false;
+  }
 });
 
+authForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const message = document.querySelector("#auth-message");
+  if (!supabaseClient) {
+    showDialogMessage(message, "Configure Supabase and reload the app before signing in.");
+    return;
+  }
+
+  const submitButton = document.querySelector("#auth-submit");
+  submitButton.disabled = true;
+  showDialogMessage(message, "");
+  try {
+    const email = String(new FormData(authForm).get("email")).trim();
+    const password = String(new FormData(authForm).get("password"));
+    const result = authMode === "signup"
+      ? await supabaseClient.auth.signUp({ email, password })
+      : await supabaseClient.auth.signInWithPassword({ email, password });
+    if (result.error) throw result.error;
+    if (authMode === "signup" && !result.data.session) {
+      showDialogMessage(message, "Account created. Check your email to confirm your account, then sign in.");
+      return;
+    }
+    authDialog.close();
+  } catch (error) {
+    reportError(authMode === "signup" ? "create your account" : "sign in", error, message);
+  } finally {
+    submitButton.disabled = false;
+  }
+});
+
+updateAccountUI();
 render();
+if (supabaseClient) {
+  supabaseClient.auth.onAuthStateChange((_event, session) => {
+    queueMicrotask(() => { void handleAuthSession(session); });
+  });
+  supabaseClient.auth.getSession().then(({ data, error }) => {
+    if (error) {
+      reportError("restore your sign-in session", error);
+      return;
+    }
+    return handleAuthSession(data.session);
+  }).catch((error) => reportError("restore your sign-in session", error));
+} else if (supabaseConfig?.url || supabaseConfig?.anonKey) {
+  showStatus("Cloud sync is configured but the Supabase library could not load. Check your internet connection.");
+}

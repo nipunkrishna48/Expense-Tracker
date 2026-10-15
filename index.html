@@ -10,6 +10,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js" defer></script>
+    <script src="config.js" defer></script>
     <script src="app.js" defer></script>
   </head>
   <body>
@@ -35,9 +37,9 @@
             <span class="tip-credit">YOUR MONEY, YOUR MOVE</span>
           </div>
           <div class="profile">
-            <div class="avatar" aria-hidden="true">S</div>
-            <div><strong>Student account</strong><span>Personal workspace</span></div>
-            <span class="profile-more" aria-hidden="true">···</span>
+            <div class="avatar" id="account-avatar" aria-hidden="true">S</div>
+            <div class="profile-copy"><strong id="account-name">Student account</strong><span id="account-detail">On this device</span></div>
+            <button class="profile-more" id="sign-out" type="button" aria-label="Sign out" hidden>↗</button>
           </div>
         </div>
       </aside>
@@ -47,9 +49,12 @@
           <div class="breadcrumb">Workspace <span>/</span> <strong>Overview</strong></div>
           <div class="topbar-actions">
             <span class="today-label" id="today-label"></span>
+            <button class="button button-secondary" id="auth-action" type="button">Sign in to sync</button>
+            <button class="button button-secondary" id="import-local" type="button" hidden>Import local data</button>
             <button class="button button-primary" id="open-expense" type="button"><span aria-hidden="true">＋</span> Add expense</button>
           </div>
         </header>
+        <div id="sync-status" class="sync-status" role="status" aria-live="polite" hidden></div>
 
         <section class="welcome-row" aria-labelledby="welcome-title">
           <div>
@@ -131,7 +136,7 @@
               <button class="button button-secondary" id="empty-add-expense" type="button">＋ Add an expense</button>
             </div>
           </div>
-          <div class="table-footer"><span id="transaction-count">Showing 0 transactions</span><span>Stored on this device <span class="privacy-lock" aria-hidden="true">⌑</span></span></div>
+          <div class="table-footer"><span id="transaction-count">Showing 0 transactions</span><span id="storage-status">Stored on this device <span class="privacy-lock" aria-hidden="true">⌑</span></span></div>
         </section>
 
         <footer class="page-footer">Made for the student life <span aria-hidden="true">✳</span> <span>Spend thoughtfully. Stress less.</span></footer>
@@ -156,8 +161,31 @@
       <form id="budget-form">
         <div class="dialog-heading"><div><p class="eyebrow">A PLAN THAT WORKS FOR YOU</p><h2 id="budget-dialog-title">Set your monthly budget</h2></div><button class="close-button" type="button" id="close-budget-dialog" aria-label="Close">×</button></div>
         <label class="form-field">Monthly amount<input name="budget" type="number" min="0" step="0.01" placeholder="e.g. 500" required></label>
-        <p class="form-hint">Your budget is saved just on this device.</p>
+        <p class="form-error" id="budget-error" role="alert" hidden></p>
+        <p class="form-hint" id="budget-hint">Your budget is saved just on this device.</p>
         <div class="dialog-actions"><button class="button button-secondary" type="button" id="cancel-budget">Cancel</button><button class="button button-primary" type="submit">Save budget <span aria-hidden="true">↗</span></button></div>
+      </form>
+    </dialog>
+
+    <dialog class="expense-dialog auth-dialog" id="auth-dialog" aria-labelledby="auth-dialog-title">
+      <form id="auth-form">
+        <div class="dialog-heading"><div><p class="eyebrow">YOUR DATA, WHEREVER YOU GO</p><h2 id="auth-dialog-title">Sign in to sync</h2></div><button class="close-button" type="button" id="close-auth-dialog" aria-label="Close">×</button></div>
+        <p class="auth-intro">Create an account or sign in to securely sync your expenses and budget across devices.</p>
+        <label class="form-field">Email address<input name="email" type="email" autocomplete="email" placeholder="you@example.com" maxlength="254" required></label>
+        <label class="form-field">Password<input name="password" type="password" autocomplete="current-password" minlength="8" placeholder="At least 8 characters" required></label>
+        <p class="form-error" id="auth-message" role="status" hidden></p>
+        <p class="auth-setup" id="auth-setup" hidden>Cloud sync is not configured yet. Follow the Supabase setup steps in the README, then add your project URL and publishable key to <code>config.js</code>. Never put a service-role key in this app.</p>
+        <div class="dialog-actions auth-actions"><button class="text-button auth-mode-toggle" id="auth-mode-toggle" type="button">New here? Create an account</button><button class="button button-primary" id="auth-submit" type="submit">Sign in <span aria-hidden="true">↗</span></button></div>
+      </form>
+    </dialog>
+
+    <dialog class="expense-dialog import-dialog" id="import-dialog" aria-labelledby="import-dialog-title">
+      <form id="import-form">
+        <div class="dialog-heading"><div><p class="eyebrow">KEEP YOUR EXISTING DATA</p><h2 id="import-dialog-title">Import this device’s data?</h2></div><button class="close-button" type="button" id="close-import-dialog" aria-label="Close">×</button></div>
+        <p class="auth-intro">Merge <strong id="local-expense-count">0</strong> locally saved expenses into your signed-in account. Your current local budget will replace the account’s budget.</p>
+        <p class="form-hint">Imported expenses are added to your cloud account; your local copy is not deleted.</p>
+        <p class="form-error" id="import-message" role="status" hidden></p>
+        <div class="dialog-actions"><button class="button button-secondary" type="button" id="cancel-import">Cancel</button><button class="button button-primary" id="confirm-import" type="submit">Import data <span aria-hidden="true">↗</span></button></div>
       </form>
     </dialog>
   </body>

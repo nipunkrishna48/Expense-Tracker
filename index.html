@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f6f7f2">
+    <meta name="description" content="A simple, student-friendly dashboard for tracking everyday spending and staying on budget.">
+    <title>Pocketwise — Student Expense Tracker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Main navigation">
+        <a class="brand" href="#overview" aria-label="Pocketwise home">
+          <span class="brand-icon" aria-hidden="true">p</span>
+          <span>pocketwise<span class="brand-period">.</span></span>
+        </a>
+
+        <div class="sidebar-label">WORKSPACE</div>
+        <nav class="main-nav">
+          <a class="nav-link active" href="#overview"><span class="nav-icon" aria-hidden="true">▦</span> Overview</a>
+          <a class="nav-link" href="#transactions"><span class="nav-icon" aria-hidden="true">↕</span> Transactions</a>
+          <a class="nav-link" href="#spending"><span class="nav-icon" aria-hidden="true">◔</span> Spending</a>
+        </nav>
+
+        <div class="sidebar-bottom">
+          <div class="sidebar-tip">
+            <span class="tip-spark" aria-hidden="true">✳</span>
+            <p class="tip-title">Small steps add up.</p>
+            <p class="tip-copy">Keep an eye on the little things today, and future you will thank you.</p>
+            <span class="tip-credit">YOUR MONEY, YOUR MOVE</span>
+          </div>
+          <div class="profile">
+            <div class="avatar" aria-hidden="true">S</div>
+            <div><strong>Student account</strong><span>Personal workspace</span></div>
+            <span class="profile-more" aria-hidden="true">···</span>
+          </div>
+        </div>
+      </aside>
+
+      <main id="overview" class="main-content">
+        <header class="topbar">
+          <div class="breadcrumb">Workspace <span>/</span> <strong>Overview</strong></div>
+          <div class="topbar-actions">
+            <span class="today-label" id="today-label"></span>
+            <button class="button button-primary" id="open-expense" type="button"><span aria-hidden="true">＋</span> Add expense</button>
+          </div>
+        </header>
+
+        <section class="welcome-row" aria-labelledby="welcome-title">
+          <div>
+            <p class="eyebrow"><span class="status-dot"></span> YOUR MONEY, AT A GLANCE</p>
+            <h1 id="welcome-title">Hey there, student<span class="heading-period">.</span></h1>
+            <p class="welcome-copy">A clearer picture of your spending starts here.</p>
+          </div>
+          <label class="month-picker">
+            <span class="sr-only">Choose month</span>
+            <span class="calendar-icon" aria-hidden="true">▦</span>
+            <input id="month-filter" type="month">
+            <span class="chevron" aria-hidden="true">⌄</span>
+          </label>
+        </section>
+
+        <section class="summary-grid" aria-label="Monthly summary">
+          <article class="summary-card balance-card">
+            <div class="card-heading"><span>Money out this month</span><span class="card-icon icon-mint" aria-hidden="true">↗</span></div>
+            <p class="metric" id="month-total">$0.00</p>
+            <p class="metric-note"><span class="note-dot"></span> <span id="expense-count">0 expenses</span> recorded</p>
+            <div class="card-decoration" aria-hidden="true"></div>
+          </article>
+          <article class="summary-card">
+            <div class="card-heading"><span>Monthly budget</span><button class="text-button" id="edit-budget" type="button">Edit budget <span aria-hidden="true">↗</span></button></div>
+            <p class="metric" id="budget-total">$0.00</p>
+            <div class="budget-progress"><span id="budget-progress"></span></div>
+            <p class="metric-note" id="budget-note">Set a budget to keep your spending on track.</p>
+          </article>
+          <article class="summary-card">
+            <div class="card-heading"><span>Left to spend</span><span class="card-icon icon-peach" aria-hidden="true">⌁</span></div>
+            <p class="metric" id="remaining-total">$0.00</p>
+            <p class="metric-note" id="remaining-note">Your budget, minus what you’ve spent.</p>
+          </article>
+        </section>
+
+        <div class="content-grid">
+          <section class="panel spending-panel" id="spending" aria-labelledby="spending-title">
+            <div class="panel-heading">
+              <div><h2 id="spending-title">Spending activity</h2><p>Your weekly spending this month</p></div>
+              <span class="chart-legend"><span></span> Expenses</span>
+            </div>
+            <div class="chart-summary"><span id="chart-caption">Daily overview</span><strong id="chart-total">$0.00</strong></div>
+            <div class="chart-wrap">
+              <div class="chart-y-labels" aria-hidden="true"><span id="y-label-1">$0</span><span id="y-label-2">$0</span><span id="y-label-3">$0</span><span>$0</span></div>
+              <div class="chart" id="daily-chart" role="img" aria-label="Daily expenses chart"></div>
+            </div>
+            <div class="chart-x-labels" id="chart-labels" aria-hidden="true"></div>
+          </section>
+
+          <section class="panel categories-panel" aria-labelledby="categories-title">
+            <div class="panel-heading">
+              <div><h2 id="categories-title">Where it goes</h2><p>Spending by category</p></div>
+              <span class="more-dot" aria-hidden="true">···</span>
+            </div>
+            <div class="category-chart-area">
+              <div class="donut" id="category-donut"><div class="donut-hole"><strong id="category-total">$0</strong><span>total spent</span></div></div>
+            </div>
+            <div class="category-legend" id="category-legend"></div>
+          </section>
+        </div>
+
+        <section class="panel transactions-panel" id="transactions" aria-labelledby="transactions-title">
+          <div class="panel-heading transactions-heading">
+            <div><h2 id="transactions-title">Recent transactions</h2><p>The little things add up. Here’s where yours went.</p></div>
+            <div class="transaction-tools">
+              <label class="search-field"><span aria-hidden="true">⌕</span><span class="sr-only">Search transactions</span><input id="search-transactions" type="search" placeholder="Search"></label>
+              <label class="filter-select"><span class="sr-only">Filter by category</span><select id="category-filter"><option value="">All categories</option></select><span aria-hidden="true">⌄</span></label>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>TRANSACTION</th><th>CATEGORY</th><th>DATE</th><th class="amount-column">AMOUNT</th><th><span class="sr-only">Actions</span></th></tr></thead>
+              <tbody id="transaction-list"></tbody>
+            </table>
+            <div class="empty-state" id="empty-state" hidden>
+              <span aria-hidden="true">◌</span>
+              <strong>No expenses yet</strong>
+              <p>Add your first expense and it’ll show up here.</p>
+              <button class="button button-secondary" id="empty-add-expense" type="button">＋ Add an expense</button>
+            </div>
+          </div>
+          <div class="table-footer"><span id="transaction-count">Showing 0 transactions</span><span>Stored on this device <span class="privacy-lock" aria-hidden="true">⌑</span></span></div>
+        </section>
+
+        <footer class="page-footer">Made for the student life <span aria-hidden="true">✳</span> <span>Spend thoughtfully. Stress less.</span></footer>
+      </main>
+    </div>
+
+    <dialog class="expense-dialog" id="expense-dialog" aria-labelledby="dialog-title">
+      <form id="expense-form">
+        <div class="dialog-heading"><div><p class="eyebrow">A LITTLE LESS GUESSWORK</p><h2 id="dialog-title">Add an expense</h2></div><button class="close-button" type="button" id="close-dialog" aria-label="Close">×</button></div>
+        <label class="form-field">What did you spend on?<input name="description" type="text" maxlength="60" placeholder="e.g. Lunch between classes" required></label>
+        <div class="form-row">
+          <label class="form-field">Amount<input name="amount" type="number" min="0.01" step="0.01" placeholder="0.00" required></label>
+          <label class="form-field">Category<select name="category" required></select></label>
+        </div>
+        <label class="form-field">Date<input name="date" type="date" required></label>
+        <p class="form-error" id="form-error" role="alert" hidden></p>
+        <div class="dialog-actions"><button class="button button-secondary" type="button" id="cancel-dialog">Cancel</button><button class="button button-primary" type="submit">Save expense <span aria-hidden="true">↗</span></button></div>
+      </form>
+    </dialog>
+
+    <dialog class="expense-dialog budget-dialog" id="budget-dialog" aria-labelledby="budget-dialog-title">
+      <form id="budget-form">
+        <div class="dialog-heading"><div><p class="eyebrow">A PLAN THAT WORKS FOR YOU</p><h2 id="budget-dialog-title">Set your monthly budget</h2></div><button class="close-button" type="button" id="close-budget-dialog" aria-label="Close">×</button></div>
+        <label class="form-field">Monthly amount<input name="budget" type="number" min="0" step="0.01" placeholder="e.g. 500" required></label>
+        <p class="form-hint">Your budget is saved just on this device.</p>
+        <div class="dialog-actions"><button class="button button-secondary" type="button" id="cancel-budget">Cancel</button><button class="button button-primary" type="submit">Save budget <span aria-hidden="true">↗</span></button></div>
+      </form>
+    </dialog>
+  </body>
+</html>

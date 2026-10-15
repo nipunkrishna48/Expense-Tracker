@@ -1,21 +1,18 @@
 # Pocketwise — Student Expense Tracker
 
-A responsive expense tracker for student life. Track spending, set a monthly budget, and optionally sync your account across devices with Supabase.
+A responsive expense tracker for student life. Track spending, set a monthly budget, and sync your account across devices with Supabase.
 
-## Run it locally
+## Open the app
 
-Open `index.html` in a modern browser. The app works without a Supabase project and stores data in that browser on that device. Cloud sign-in requires the setup below and serving the site from an HTTP(S) address; use GitHub Pages or another static web host rather than opening the file directly.
+The live app is [Pocketwise on GitHub Pages](https://nipunkrishna48.github.io/Expense-Tracker/). Cloud sign-in works from this HTTPS address. Opening `index.html` directly works in local-only mode.
 
-## Set up cloud accounts and storage
+## Connected Supabase project
 
-1. Create a project at [supabase.com](https://supabase.com/).
-2. In the Supabase SQL Editor, run [`supabase/schema.sql`](./supabase/schema.sql). It creates the expenses and budget tables, enables row-level security (RLS), and limits authenticated users to their own records. (This has already been run for the connected project.)
-3. `config.js` is already set up with the connected project's URL and **publishable** key. The publishable key is designed for browser use. Never add a `service_role` or secret key to browser code.
+The free Supabase project, database tables, row-level security policies, browser publishable key, and GitHub Pages deployment are configured. The schema in [`supabase/schema.sql`](./supabase/schema.sql) limits each signed-in student to their own expenses and budget. The project's Site URL is set to the live app URL.
 
-4. Deploy the app to an HTTPS static host. This repository includes a GitHub Actions workflow for GitHub Pages; in repository Settings → Pages, select **GitHub Actions** as the build and deployment source. After the workflow deploys, use its site URL as the Supabase **Site URL** in Authentication → URL Configuration and add it to the allowed redirect URLs too.
-5. In Authentication → Providers, enable Email. Create an account in Pocketwise, confirm your email if Supabase asks you to, then sign in.
+Create an account in Pocketwise using your email and a password. Confirm your email if prompted, then sign in. Your expenses and monthly budget will sync across devices. If this browser already has local expenses, choose **Import local data** to merge them into your account; the local budget replaces the account budget. The local copy is kept.
 
-Once signed in, expenses and the monthly budget load from your account and save to Supabase. Signing out returns to device-local data. If this browser already has local expenses, choose **Import local data** to merge those expenses into the account; the local budget replaces the account budget. Imports can be repeated safely.
+For a new Supabase project, run [`supabase/schema.sql`](./supabase/schema.sql) in its SQL Editor, set its URL and browser-safe **publishable** key in `config.js`, and set its Authentication Site URL to the deployed HTTPS app. Never put a `service_role` or secret key in browser code.
 
 The Supabase browser SDK is loaded from jsDelivr, so the app needs an internet connection for cloud sign-in and sync. The local-only tracker works without the Supabase configuration.
 

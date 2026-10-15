@@ -9,17 +9,9 @@ Open `index.html` in a modern browser. The app works without a Supabase project 
 ## Set up cloud accounts and storage
 
 1. Create a project at [supabase.com](https://supabase.com/).
-2. In the Supabase SQL Editor, run [`supabase/schema.sql`](./supabase/schema.sql). It creates the expenses and budget tables, enables row-level security (RLS), and limits authenticated users to their own records.
-3. Copy the project URL and its **publishable** key (or legacy `anon` key) from the Supabase project API settings into `config.js`:
+2. In the Supabase SQL Editor, run [`supabase/schema.sql`](./supabase/schema.sql). It creates the expenses and budget tables, enables row-level security (RLS), and limits authenticated users to their own records. (This has already been run for the connected project.)
+3. `config.js` is already set up with the connected project's URL and **publishable** key. The publishable key is designed for browser use. Never add a `service_role` or secret key to browser code.
 
-   ```js
-   window.POCKETWISE_SUPABASE_CONFIG = {
-     url: "https://your-project-ref.supabase.co",
-     anonKey: "your-public-publishable-key",
-   };
-   ```
-
-   These values identify a public client and are not passwords. **Never use or publish a `service_role` key** in browser code.
 4. Deploy the app to an HTTPS static host. This repository includes a GitHub Actions workflow for GitHub Pages; in repository Settings → Pages, select **GitHub Actions** as the build and deployment source. After the workflow deploys, use its site URL as the Supabase **Site URL** in Authentication → URL Configuration and add it to the allowed redirect URLs too.
 5. In Authentication → Providers, enable Email. Create an account in Pocketwise, confirm your email if Supabase asks you to, then sign in.
 
